@@ -340,7 +340,13 @@ python -c "import struct; d=open('boot.img','rb').read(); open('kernel','wb').wr
 
 # 2. Global symbols (kallsyms)
 python tools/extract_target.py --kallsyms kallsyms.txt    # 28 offsets, auto-validated
+```
 
+For stage 2, use the [kallsyms tools guide](tools/kallsyms/GUIDE.md) to recover
+`kallsyms.txt` from `boot.img`. It covers kernel extraction, `vmlinux`
+reconstruction, and symbol export, starting with the standard AOSP path.
+
+```bash
 # 3. Struct fields (BTF)
 python tools/extract_btf.py kernel  # 57 offsets, auto-validated
 
