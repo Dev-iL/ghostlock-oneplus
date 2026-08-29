@@ -372,69 +372,17 @@ static void slab_drain(void) {
   }
 }
 
-static int write_ksu_finalize_script(void) {
-  static const char finalize_script[] =
-    "#!/system/bin/sh\n"
-    "PATH=/system/bin:/system/xbin:/vendor/bin\n"
-    "diag() { printf '%s\\n' \"$*\" >&4; }\n"
-    "report_status() { printf '%s\\n' \"$1\" >&3; }\n"
-    "module_loaded() {\n"
-    "  while IFS=' ' read -r name rest; do\n"
-    "    [ \"$name\" = kernelsu ] && return 0\n"
-    "  done </proc/modules\n"
-    "  return 1\n"
-    "}\n"
-    "w=0\n"
-    "while [ \"$w\" -lt 60 ]; do\n"
-    "  if module_loaded; then\n"
-    "    diag '[+] KSU LOADED (finalizer)'\n"
-    "    if [ -n \"$RSPROP\" ]; then\n"
-    "      \"$RSPROP\" resetprop -p persist.adb.tcp.port $ADB_PORT 2>&1 && diag \"[+] persist.adb.tcp.port=$ADB_PORT set via resetprop\"\n"
-    "      \"$RSPROP\" resetprop service.adb.tcp.port $ADB_PORT 2>/dev/null\n"
-    "    fi\n"
-    "    if [ -n \"$APK\" ] && [ -x /data/adb/ksud ]; then\n"
-    "      /data/adb/ksud kernel dynamic-manager set-apk \"$APK\" 2>/dev/null && diag '[+] dynamic manager set'\n"
-    "    else\n"
-    "      diag '[!] dynamic manager setup unavailable'\n"
-    "    fi\n"
-    "    printf '1' >&5\n"
-    "    diag '[*] enforcing restoration requested'\n"
-    "    report_status ready\n"
-    "    diag '[+] finalizer done'\n"
-    "    exit 0\n"
-    "  fi\n"
-    "  /system/bin/sleep 1\n"
-    "  w=$((w + 1))\n"
-    "done\n"
-    "printf '1' >&5\n"
-    "diag '[*] enforcing restoration requested'\n"
-    "report_status failed:module-not-loaded\n"
-    "diag '[!] KSU finalizer timed out waiting for module'\n"
-    "exit 1\n";
-  int sfd = open("/data/local/tmp/.ghostlock_ksu_finalize.sh",
-                 O_WRONLY | O_CREAT | O_TRUNC, 0755);
-  if (sfd < 0) return 0;
-  ssize_t wrote = write(sfd, finalize_script, strlen(finalize_script));
-  close(sfd);
-  return wrote == (ssize_t)strlen(finalize_script);
-}
-
 static void write_root_script(void) {
   int sfd = open("/data/local/tmp/.ghostlock_root.sh", O_WRONLY|O_CREAT|O_TRUNC, 0755);
   if (sfd < 0) return;
   int policy_script_ready = write_selinux_policy_fix_script();
-  int finalizer_script_ready = write_ksu_finalize_script();
   unlink("/data/local/tmp/.ghostlock_ksu.status");
   const char *script =
     "#!/system/bin/sh\n"
-    "PATH=/system/bin:/system/xbin:/vendor/bin\n"
     "ROOT_LOG=/data/local/tmp/.ghostlock_root.log\n"
     "STATUS=/data/local/tmp/.ghostlock_ksu.status\n"
     "diag() { echo \"$*\"; echo \"$*\" >>$ROOT_LOG; }\n"
     "report_status() { printf '%s\\n' \"$1\" >$STATUS; }\n"
-    "exec 3>$STATUS\n"
-    "exec 4>>$ROOT_LOG\n"
-    "exec 5>/sys/fs/selinux/enforce\n"
     "report_status pending\n"
     "diag '[+] root shell pid='$$' uid='$(id -u)\n"
     "if [ -x /data/local/tmp/.ghostlock_fixpol.sh ]; then\n"
@@ -451,20 +399,10 @@ static void write_root_script(void) {
     "fi\n"
     "KSUD=$(find /data/app -path '*/com.resukisu.resukisu*/lib/arm64/libksud.so' 2>/dev/null | head -1)\n"
     "if [ -z \"$KSUD\" ]; then KSUD=/data/adb/ksu/bin/ksud; fi\n"
-    "APK=$(/system/bin/pm path com.resukisu.resukisu 2>/dev/null | /system/bin/sed 's/package://')\n"
-    "ADB_PORT=$(/system/bin/cat /data/local/tmp/a/adb_port 2>/dev/null || /system/bin/echo 5555)\n"
-    "FINALIZER=/data/local/tmp/.ghostlock_ksu_finalize.sh\n"
-    "start_finalizer() {\n"
-    "  RSPROP=\"$KSUD\" APK=\"$APK\" ADB_PORT=\"$ADB_PORT\" setsid /system/bin/sh \"$FINALIZER\" 3>&3 4>&4 5>&5 </dev/null >>$ROOT_LOG 2>&1 &\n"
-    "  diag '[*] finalizer pid='$!\n"
-    "}\n"
-    "if [ ! -x \"$FINALIZER\" ]; then\n"
-    "  echo 1 > /sys/fs/selinux/enforce 2>/dev/null\n"
-    "  report_status failed:finalizer-not-created\n"
-    "  diag '[!] KernelSU finalizer was not created'\n"
-    "elif grep -q kernelsu /proc/modules 2>/dev/null; then\n"
-    "  diag '[+] KernelSU already loaded; starting finalizer'\n"
-    "  start_finalizer\n"
+    "KSU_READY=0\n"
+    "if grep -q kernelsu /proc/modules 2>/dev/null; then\n"
+    "  diag '[+] KernelSU already loaded'\n"
+    "  KSU_READY=1\n"
     "elif [ -x \"$KSUD\" ] || [ -f \"$KSUD\" ]; then\n"
     "  diag '[*] ksud:' $KSUD\n"
     "  chmod 755 \"$KSUD\" 2>/dev/null\n"
@@ -476,21 +414,57 @@ static void write_root_script(void) {
     "  diag '[*] ksud late-load --kmi' $KMI\n"
     "  KSUD_LOG=/data/local/tmp/.ghostlock_ksud.log\n"
     "  rm -f \"$KSUD_LOG\"\n"
-    "  start_finalizer\n"
     "  setsid \"$KSUD\" late-load --kmi \"$KMI\" </dev/null >\"$KSUD_LOG\" 2>&1 &\n"
     "  KSUD_PID=$!\n"
     "  diag '[*] ksud pid='$KSUD_PID\n"
+    "  KSUD_EXITED=0\n"
+    "  for w in $(seq 1 30); do\n"
+    "    if ! kill -0 \"$KSUD_PID\" 2>/dev/null; then KSUD_EXITED=1; break; fi\n"
+    "    sleep 1\n"
+    "  done\n"
+    "  if [ \"$KSUD_EXITED\" = 1 ]; then\n"
+    "    wait \"$KSUD_PID\"; KSUD_STATUS=$?\n"
+    "    diag '[*] ksud exit='$KSUD_STATUS\n"
+    "  else\n"
+    "    diag '[!] ksud still running after 30s; capturing process state'\n"
+    "    cat /proc/$KSUD_PID/status >>$ROOT_LOG 2>&1\n"
+    "    cat /proc/$KSUD_PID/wchan >>$ROOT_LOG 2>&1\n"
+    "  fi\n"
+    "  if [ -s \"$KSUD_LOG\" ]; then\n"
+    "    diag '[*] ksud output:'\n"
+    "    tail -n 40 \"$KSUD_LOG\"\n"
+    "    tail -n 40 \"$KSUD_LOG\" >>$ROOT_LOG\n"
+    "  fi\n"
+    "fi\n"
+    "if grep -q kernelsu /proc/modules 2>/dev/null; then KSU_READY=1; fi\n"
+    "if [ \"$KSU_READY\" = 1 ]; then\n"
+    "  diag '[+] KSU LOADED'\n"
+    "  grep kernelsu /proc/modules\n"
+    "  RSPROP=$(find /data/app -path '*/com.resukisu.resukisu*/lib/arm64/libksud.so' 2>/dev/null | head -1)\n"
+    "  if [ -n \"$RSPROP\" ]; then\n"
+    "    chmod 755 \"$RSPROP\" 2>/dev/null\n"
+    "    ADB_PORT=$(cat /data/local/tmp/a/adb_port 2>/dev/null || echo 5555)\n"
+    "    \"$RSPROP\" resetprop -p persist.adb.tcp.port $ADB_PORT 2>&1 && echo \"[+] persist.adb.tcp.port=$ADB_PORT set via resetprop\"\n"
+    "    \"$RSPROP\" resetprop service.adb.tcp.port $ADB_PORT 2>/dev/null\n"
+    "  fi\n"
+    "  rm -f /data/local/tmp/.ghostlock_w1\n"
+    "  APK=$(pm path com.resukisu.resukisu 2>/dev/null | sed 's/package://')\n"
+    "  if [ -n \"$APK\" ] && [ -x /data/adb/ksud ]; then\n"
+    "    /data/adb/ksud kernel dynamic-manager set-apk \"$APK\" 2>/dev/null && echo '[+] dynamic manager set'\n"
+    "  fi\n"
+    "  echo 1 > /sys/fs/selinux/enforce 2>/dev/null\n"
+    "  diag '[*]' $(id) 'enforce='$(cat /sys/fs/selinux/enforce 2>/dev/null)\n"
+    "  report_status ready\n"
+    "  diag '[+] done'\n"
     "else\n"
     "  echo 1 > /sys/fs/selinux/enforce 2>/dev/null\n"
-    "  report_status failed:ksud-not-found\n"
-    "  diag '[!] ksud not found'\n"
+    "  diag '[*]' $(id) 'enforce='$(cat /sys/fs/selinux/enforce 2>/dev/null)\n"
+    "  report_status failed:module-not-loaded\n"
+    "  diag '[!] KSU NOT loaded'\n"
     "fi\n"
     "if [ -t 0 ]; then exec /system/bin/sh -i; fi\n";
   if (!policy_script_ready) {
     pr_info("root script: early policy repair script unavailable\n");
-  }
-  if (!finalizer_script_ready) {
-    pr_info("root script: post-load finalizer script unavailable\n");
   }
   write(sfd, script, strlen(script));
   close(sfd);
