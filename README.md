@@ -255,7 +255,7 @@ Only `boot.img` is needed — no root, no device access required.
 python -c "import struct; d=open('boot.img','rb').read(); open('kernel','wb').write(d[4096:4096+struct.unpack_from('<I',d,8)[0]])"
 
 # 2. Global symbols (kallsyms)
-python tools/extract_target.py    # 28 offsets, auto-validated
+python tools/extract_target.py --kallsyms kallsyms.txt    # 28 offsets, auto-validated
 
 # 3. Struct fields (BTF)
 python tools/extract_btf.py kernel  # 57 offsets, auto-validated
