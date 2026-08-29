@@ -84,6 +84,7 @@ static const struct kernel_offsets known_offsets[] = {
 #include "pad4pro/offsets.h"
 #include "cph2521/offsets.h"
 #include "vivot4/offsets.h"
+#include "vivoxfold3pro/offsets.h"
   { .uname_r = NULL }
 };
 
