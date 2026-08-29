@@ -63,13 +63,16 @@ def find_kallsyms_in_kernel(data):
     return None, banner
 
 def parse_kallsyms_file(path):
-    """Parse a kallsyms text file (from /proc/kallsyms or nm output)."""
+    """Parse ``address type name`` output from /proc/kallsyms, nm, or compact readelf."""
     symbols = {}
     with open(path, 'r') as f:
         for line in f:
             parts = line.strip().split()
             if len(parts) >= 3:
-                addr = int(parts[0], 16)
+                try:
+                    addr = int(parts[0], 16)
+                except ValueError:
+                    continue
                 typ = parts[1]
                 name = parts[2]
                 if addr > 0:
@@ -162,7 +165,9 @@ def compute_offsets(symbols, kimage_base):
     if not addr:
         # Try Rust mangled misc device name
         for name, (a, typ) in symbols.items():
-            if "AshmemModule" in name and typ in ('d', 'D', 'b', 'B'):
+            if "AshmemModule" in name and typ in {
+                "d", "D", "b", "B", "OBJECT", "TLS", "COMMON"
+            }:
                 addr = a
                 break
     if addr:
@@ -288,12 +293,12 @@ def verify_offsets(results, symbols, kimage_base):
 
     # 1. Symbol type checks
     type_checks = {
-        "init_task": ("D", "B", "d", "b"),    # data/bss
-        "init_cred": ("D", "d"),               # data (initialized)
-        "selinux_state": ("B", "b"),            # bss
-        "loggers": ("D", "d"),                  # data
-        "noop_llseek": ("T", "t"),              # text (function)
-        "copy_splice_read": ("T", "t"),         # text
+        "init_task": ("D", "B", "d", "b", "OBJECT", "TLS", "COMMON"),
+        "init_cred": ("D", "d", "OBJECT", "TLS", "COMMON"),
+        "selinux_state": ("B", "b", "OBJECT", "TLS", "COMMON"),
+        "loggers": ("D", "d", "OBJECT", "TLS", "COMMON"),
+        "noop_llseek": ("T", "t", "FUNC", "IFUNC"),
+        "copy_splice_read": ("T", "t", "FUNC", "IFUNC"),
     }
     for sym_name, expected_types in type_checks.items():
         t = sym_type(sym_name)
