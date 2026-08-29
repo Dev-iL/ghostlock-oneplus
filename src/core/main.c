@@ -300,10 +300,28 @@ static int write_selinux_policy_fix_script(void) {
   return 1;
 }
 
+static int kernelsu_module_loaded(void) {
+  int fd = open("/proc/modules", O_RDONLY);
+  if (fd < 0) return 0;
+
+  char modules[8192] = {0};
+  ssize_t n = read(fd, modules, sizeof(modules) - 1);
+  close(fd);
+  return n > 0 && strstr(modules, "kernelsu ") != NULL;
+}
+
 static int wait_for_ksu_status(void) {
   static const char status_path[] = "/data/local/tmp/.ghostlock_ksu.status";
 
   for (int attempt = 1; attempt <= 40; attempt++) {
+    /* The late-load helper can be replaced or blocked as the module comes
+     * online. /proc/modules is observable from this original shell and is
+     * therefore the authoritative readiness signal. */
+    if (kernelsu_module_loaded()) {
+      pr_success("KernelSU module is loaded\n");
+      return 0;
+    }
+
     char status[128] = {0};
     int fd = open(status_path, O_RDONLY);
     if (fd >= 0) {
