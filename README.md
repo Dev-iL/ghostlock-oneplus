@@ -156,6 +156,27 @@ PSELECT_SHIFT=-2 /data/local/tmp/a/e       # OnePlus 13 (6.6)
 
 ## Build
 
+Build from the repository root. The recommended command is:
+
+```bash
+cd /path/to/ghostlock-oneplus
+make NDK_ROOT=/path/to/android-ndk
+```
+
+This creates the executable at:
+
+```text
+/path/to/ghostlock-oneplus/ghostlock
+```
+
+In other words, the output is `./ghostlock` in the directory where `make` is
+run; it is not placed inside the NDK or under `src/`. On Windows, run this
+build from WSL or another Linux environment and use the resulting ARM64
+executable.
+
+To invoke the compiler directly instead of `make`, run this command from the
+same repository root. The `-o ./ghostlock` option writes to that same location:
+
 ```bash
 make NDK_ROOT=/path/to/android-ndk
 ```
@@ -183,16 +204,92 @@ GhostLock provides temporary root. KernelSU installation requires **ksud** which
 | **ReSukiSU APK** (recommended) | Install [ReSukiSU](https://github.com/ReSukiSU/ReSukiSU) or this [fork](https://github.com/JoinChang/ReSukiSU). Bundles `libksud.so`. |
 | **CI release** | Download from [ReSukiSU CI](https://github.com/cctv18/ReSukiSU_CI/releases) |
 
-## Setup
+> Without ksud, the exploit achieves root (uid=0) but KSU won't be installed and `su` won't persist.
+
+## Setup and direct ADB run
+
+The normal run uses the connected device's ADB shell. Before starting, make
+sure USB debugging is enabled, the device is unlocked enough to approve the
+computer's ADB key, and `adb devices` shows the device with state `device`:
 
 ```bash
+adb devices
+```
+
+If the state is `unauthorized`, unlock the phone, approve the RSA prompt, and
+run `adb devices` again.
+
+Build `ghostlock` first, then run these commands from the repository root:
+
+```bash
+# Create the directory on the phone, then copy the host binary there.
 adb shell mkdir -p /data/local/tmp/a
 adb push ./ghostlock /data/local/tmp/a/e
 adb shell chmod 755 /data/local/tmp/a/e
+```
+
+Execute the copied binary on the phone with:
+
+```bash
 adb shell /data/local/tmp/a/e
 ```
 
-Run after boot completes and ADB is ready.
+`adb shell` is important: `/data/local/tmp/a/e` is a path on the phone, so
+entering that path by itself in the computer's terminal will not run it. If
+you rebuild the binary, repeat the `adb push` and `chmod` commands before
+running it again. In PowerShell, `./ghostlock` can also be written as
+`.\ghostlock`.
+
+## Optional bootstrap mode
+
+`--bootstrap` is for launching from an app or another restricted phone-side
+process. The normal direct ADB command above is the preferred way to run the
+exploit from a computer. Bootstrap mode needs a local ADB-over-TCP endpoint and
+the ADB private key used to authenticate to it:
+
+```bash
+# Enable ADB TCP on the connected phone (the default port is 5555).
+adb tcpip 5555
+
+# The binary should already be installed at /data/local/tmp/a/e.
+adb push ~/.android/adbkey /data/local/tmp/a/adbkey
+
+# Optional: use another port. The two commands must use the same port.
+# adb tcpip 23946
+# adb shell "echo 23946 > /data/local/tmp/a/adb_port"
+
+# Launch the phone-side bootstrap flow.
+adb shell /data/local/tmp/a/e --bootstrap
+```
+
+On Windows PowerShell, the private key is usually
+`$env:USERPROFILE\.android\adbkey`. Treat this file as sensitive.
+
+A successful run changes the current kernel and can load KernelSU through
+`ksud`. ReSukiSU jailbreak-mode state is tied to the current boot; after a
+reboot, run the exploit again unless a separate boot-time integration is
+configured. An ADB TCP setting only controls how ADB connects and does not by
+itself preserve root.
+
+## Usage
+
+```bash
+# Run from a computer through ADB.
+adb shell /data/local/tmp/a/e
+
+# Optional phone-side mode for a companion app.
+adb shell /data/local/tmp/a/e --bootstrap
+
+# Diagnostic/partial operation.
+adb shell /data/local/tmp/a/e --write1
+
+# OnePlus 13 / another profile that needs a shift override.
+adb shell "PSELECT_SHIFT=-2 /data/local/tmp/a/e"
+```
+
+Start after Android has finished booting and ADB is ready. There is no fixed
+30-second post-boot deadline; if a timing-sensitive attempt reports a timeout,
+run the command again.
 
 ## Adding New Devices
 
