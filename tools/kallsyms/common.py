@@ -118,4 +118,3 @@ def atomic_output(path: Path, *, suffix: str = ".tmp") -> Iterator[Path]:
         os.replace(temporary, path)
     finally:
         temporary.unlink(missing_ok=True)
-
