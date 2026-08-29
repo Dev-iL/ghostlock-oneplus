@@ -47,15 +47,6 @@ struct kernel_offsets {
   .task_comm=0x910, .task_tasks=0x638, .task_seccomp=0x9C8, \
   .mm_owner=0x410
 
-#define STRUCT_OFFSETS_5_10 \
-  .task_prio=0x84, .task_normal_prio=0x8C, .task_sched_task_group=0x310, \
-  .task_pi_lock=0x86C, .task_pi_waiters=0x880, \
-  .task_pi_top_task=0x890, .task_pi_blocked_on=0x898, \
-  .task_pid=0x5C8, .task_tgid=0x5CC, .task_real_parent=0x5D8, \
-  .task_atomic_flags=0x590, .task_real_cred=0x778, .task_cred=0x780, \
-  .task_comm=0x790, .task_tasks=0x4C8, .task_seccomp=0x848, \
-  .mm_owner=0x348, .waiter_compact=1
-
 #define STRUCT_OFFSETS_6_1 \
   .task_prio=0x84, .task_normal_prio=0x8C, .task_sched_task_group=0x340, \
   .task_pi_lock=0x924, .task_pi_waiters=0x938, \
@@ -64,6 +55,15 @@ struct kernel_offsets {
   .task_atomic_flags=0x638, .task_real_cred=0x830, .task_cred=0x838, \
   .task_comm=0x848, .task_tasks=0x678, .task_seccomp=0xAA0, \
   .mm_owner=0x298, .waiter_compact=1
+
+#define STRUCT_OFFSETS_5_10 \
+  .task_prio=0x84, .task_normal_prio=0x8C, .task_sched_task_group=0x310, \
+  .task_pi_lock=0x86C, .task_pi_waiters=0x880, \
+  .task_pi_top_task=0x890, .task_pi_blocked_on=0x898, \
+  .task_pid=0x5C8, .task_tgid=0x5CC, .task_real_parent=0x5D8, \
+  .task_atomic_flags=0x590, .task_real_cred=0x778, .task_cred=0x780, \
+  .task_comm=0x790, .task_tasks=0x4C8, .task_seccomp=0x848, \
+  .mm_owner=0x348, .waiter_compact=1
 
 #define STRUCT_OFFSETS_6_6 \
   .task_prio=0x84, .task_normal_prio=0x8C, .task_sched_task_group=0x348, \
