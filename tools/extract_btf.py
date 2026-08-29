@@ -113,6 +113,13 @@ FIELDS_NEEDED = {
         "filter_count": "SECCOMP_FILTER_COUNT_OFF",
         "filter": "SECCOMP_FILTER_OFF",
     },
+    "selinux_state": {
+        "enforcing": "SELINUX_STATE_ENFORCING_OFF",
+        "initialized": "SELINUX_STATE_INITIALIZED_OFF",
+        "policycap": "SELINUX_STATE_POLICYCAP_OFF",
+        "android_netlink_route": "SELINUX_STATE_NETLINK_ROUTE_OFF",
+        "android_netlink_getneigh": "SELINUX_STATE_NETLINK_GETNEIGH_OFF",
+    },
     "pipe_inode_info": {
         "head": "PIPE_HEAD_OFF",
         "tail": "PIPE_TAIL_OFF",
