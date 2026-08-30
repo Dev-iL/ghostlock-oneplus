@@ -1,0 +1,5 @@
+approval_policy = "never"
+approvals_reviewer = "auto_review"
+
+[sandbox_workspace_write]
+network_access = true
